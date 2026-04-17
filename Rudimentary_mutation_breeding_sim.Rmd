@@ -1,0 +1,202 @@
+---
+title: "EMS_mutations"
+output: html_document
+---
+
+
+
+```{r}
+#to split fasta files into separate fasta for each chromosome, run this in linux terminal
+#copied from https://sites.psu.edu/biomonika/2017/03/09/split-large-fasta-file-into-multiple-fasta-files-on-any-computer/
+# csplit PvulgarisLaborOvalle_670_v1.0.fa /\>Chr.*/ {*} 
+# every sequence is now in one file named xxx something
+# for a in x*; do echo $a; mv $a $(head -1 $a).txt; done; 
+#we just renamed each file by using first line of each file
+
+#this is not absolutely necessary but it will stop the program from using up too much ram
+
+library(stringr)
+library(Biostrings)
+#read text file containing genome data of the form AGTTCG... into temporary object
+#currently set up to read (11th chromosome of) genome data of common bean
+chrom_vector<-readLines(">Chr11.txt")
+#remove lines that are headers for fasta files by eliminating lines with ">"
+chrom_vector<- grep(">", chrom_vector, value = TRUE, invert = TRUE)
+#test is transformed into list, called, with each nucleotide in file
+chrom_vector<-strsplit(x=chrom_vector, "")
+#overall mutation rate is set for SNPs. mutagens favor some transitions and these biases are set later
+mut_rate<-.0001
+#chrom_list is transformed into a character vector
+chrom_vector<-unlist(chrom_vector)
+#run garbage collection
+gc()
+#length of chromosome is calculated and stored in variable called chrom_len
+chrom_len<-length(chrom_vector)
+chrom_len
+#the overall mutation rate and length of chromosome is used to find the total number of SNPs
+num_of_muts<-mut_rate*chrom_len
+#run garbage collection
+gc()
+#each transition type is done in sequence starting with A to T transition
+
+#bias of A to T transition. 0.5 would mean that half of SNPs are of this type
+portion_of_A_to_T<-0.1
+#amount of SNPs that will be of the A to T type. rounded to nearest whole number
+size_A_to_T<-round(num_of_muts*portion_of_A_to_T)
+size_A_to_T
+#locations for the SNPs are decided (pseudo)randomly using sample function in base R
+mut_locations_A_to_T<-sample(x=chrom_len, size=size_A_to_T, replace=FALSE)
+
+# location of each SNP is checked if it has an A nucleotide and, if so, is transitioned to T
+#if the location does not have an A, a new location is randomly chosen and added to the end of the location list
+#size_A_to_T variable is increased by 1 if mut_locations_A_to_T is added so new locations are used
+#this strategy is used instead of going through each nucleotide and giving it a chance to transition
+#the chosen strategy should be more efficient since not every nucleotide needs to be read.
+#especially since very few nucleotides will be changed and there will be millions of unmodified nucleotides
+for (i in 1:size_A_to_T) {
+  latest_mut_location<-mut_locations_A_to_T[i]
+  if (chrom_vector[latest_mut_location] == 'A') {
+   chrom_vector[latest_mut_location] <- 'T'
+   
+  }
+  else {
+    append(mut_locations_A_to_T, sample(x=chrom_len, size=1))
+    size_A_to_T<-size_A_to_T+1
+  }
+ 
+}
+gc()
+#same process but for C to G
+portion_of_C_to_G<-0.4
+
+size_C_to_G<-round(num_of_muts*portion_of_C_to_G)
+
+
+mut_locations_C_to_G<-sample(x=chrom_len, size=size_C_to_G, replace=FALSE)
+for (i in 1:size_C_to_G) {
+  latest_mut_location<-mut_locations_C_to_G[i]
+  if (chrom_vector[latest_mut_location] == 'C') {
+   chrom_vector[latest_mut_location] <- 'G'
+   
+  }
+  else {
+    append(mut_locations_C_to_G, sample(x=chrom_len, size=1))
+    size_C_to_G<-size_C_to_G+1
+  }
+ 
+}
+gc()
+#same process but for G to T
+portion_of_G_to_T<-0.2
+
+size_G_to_T<-round(num_of_muts*portion_of_G_to_T)
+
+
+mut_locations_G_to_T<-sample(x=chrom_len, size=size_G_to_T, replace=FALSE)
+for (i in 1:size_G_to_T) {
+  latest_mut_location<-mut_locations_G_to_T[i]
+  if (chrom_vector[latest_mut_location] == 'G') {
+   chrom_vector[latest_mut_location] <- 'T'
+   
+  }
+  else {
+    append(mut_locations_G_to_T, sample(x=chrom_len, size=1))
+    size_G_to_T<-size_G_to_T+1
+  }
+ 
+}
+
+#same process but for T to C
+portion_of_T_to_C<-0.3
+
+size_T_to_C<-round(num_of_muts*portion_of_T_to_C)
+
+
+mut_locations_T_to_C<-sample(x=chrom_len, size=size_T_to_C, replace=FALSE)
+for (i in 1:size_T_to_C) {
+  latest_mut_location<-mut_locations_T_to_C[i]
+  if (chrom_vector[latest_mut_location] == 'T') {
+   chrom_vector[latest_mut_location] <- 'C'
+   
+  }
+  else {
+    append(mut_locations_T_to_C, sample(x=chrom_len, size=1))
+    size_T_to_C<-size_T_to_C+1
+  }
+ 
+}
+gc()
+
+#now we do insertion mutations
+#assign number of insertions per chromosome (this could be modified to be randomized)
+number_of_insertions<-50
+#now determine locations for these insertions
+insertion_locations<-sample(x=chrom_len, size=number_of_insertions, replace=FALSE)
+insertion_locations<-sort(insertion_locations, decreasing = TRUE)
+#set max length for insertions. min length is 1
+insertion_max<-4
+#create vector to sample from to create sequence for insertions
+nucleotides<-c("A", "T", "G", "C")
+ 
+for (i in 1:number_of_insertions) {
+  latest_insertion_size<-sample(insertion_max, size=1)
+  latest_insertion<-sample(nucleotides, size=latest_insertion_size)
+  chrom_vector<-append(chrom_vector, values=latest_insertion, after=insertion_locations[i])
+}
+gc()
+#now we do deletion mutations
+#assign number of deletions per chromosome(this could be modified to be randomized)
+number_of_deletions<-60
+#now determine locations for these deletions
+deletion_locations<-sample(x=chrom_len, size=number_of_deletions, replace=FALSE)
+deletions_locations<-sort(deletion_locations, decreasing = TRUE)
+#set max length for deletions. min is 1
+deletion_max<-4
+for (i in 1:number_of_deletions) {
+  latest_deletion_size<-sample(deletion_max, size=1)
+  chrom_vector[-((deletions_locations[i]):(deletions_locations[i]+latest_deletion_size))]
+}
+gc()
+#create inversion mutations
+#choose number of inversions
+number_of_inversions<-50
+#choose max inversion length (in base pairs)
+max_inversion_length<-10
+#choose avergae inversion length (in base pairs)
+avg_inversion_length<-5
+#sample from normal distribution
+
+#generate locations for inversions
+inversion_locations<-sample(x=chrom_len, size=number_of_inversions, replace = FALSE)
+inversion_locations<-sort(inversion_locations, decreasing = TRUE)
+
+for (i in 1:number_of_inversions) {
+  #choose length of the inversion for current iteration
+  latest_inversion_len<-sample(max_inversion_length, replace= FALSE, rnorm(n=1, mean = avg_inversion_length, sd = 1))
+  #extract sequence using length and latest location
+  sequence_for_inversion<-chrom_vector[inversion_locations[i]:inversion_locations[i]+latest_inversion_len]
+  #invert segment
+  inverted_segment<-rev(sequence_for_inversion)
+  #drop non-inverted segment from original vector using negative indexing
+  chrom_vector<-chrom_vector[-c(inversion_locations[i]:inversion_locations[i]+latest_inversion_len)]
+  #now add inverted version of section to the original vector
+  chrom_vector<-append(chrom_vector, values=inverted_segment, after = inversion_locations[i])
+}
+#preview chrom_vector
+print("chrom")
+print(chrom_vector)
+#check if chosen gene has appeared in this instance
+
+#load chosen gene
+desired_mutation<-readLines("BAR_gene.txt")
+#convert desired mutation to DNAstring container from biostrings package
+desired_mutation<-paste0(desired_mutation, collapse = "")
+desired_mutation<-DNAString(desired_mutation)
+#do same for chrom_vector
+chrom_vector<-paste0(chrom_vector, collapse = "")
+chrom_DNAstring<-DNAString(chrom_vector)
+#now we can use Biostrings functions to compare the sequences
+matchPattern(desired_mutation, chrom_DNAstring, fixed = TRUE)
+
+```
+
